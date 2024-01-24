@@ -10,7 +10,7 @@
   <body style="margin: 0; padding: 0">
     <div id="sankey-diagram" style="width: 100vw; height: 100vh"></div>
     <footer
-      style="text-align: center; width: 100vw; position: absolute; bottom: 0px"
+      style="text-align: center; font-size:12px; width: 100vw; position: absolute; bottom: 0px"
     >
       top 20 (by voting power) voters and aggregated rest – 20240124 –
       <a href="https://twitter.com/kwiz4g">@kwiz4g</a>
@@ -113,6 +113,12 @@
             },
             width: window.innerWidth,
             height: window.innerHeight,
+            margin: {
+      t: 1,  // top margin
+      b: 1,  // bottom margin
+      l: 1,  // left margin
+      r: 1   // right margin
+    }
           };
 
           Plotly.newPlot("sankey-diagram", [sankeyData], layout);
