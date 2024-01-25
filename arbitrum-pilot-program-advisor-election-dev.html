@@ -27,11 +27,12 @@
           limit = urlParams.has("limit");
           console.log("limit exceeded enabled: ", limit);
 
-          if (urlParams.has("top")) {
-            const top = parseInt(urlParams.get("top"), 10);
-          } else {
-            top = 20;
+          topcutoff = 20;
+
+          if (urlParams.has("topcutoff")) {
+            topcutoff = parseInt(urlParams.get("topcutoff"), 10);
           }
+          console.log('aggregating everything below top ', topcutoff, ' votingpower')
 
           const nodes = [];
           const links = [];
@@ -39,7 +40,7 @@
           const votes = jsonData.data.votes;
           const topVoters = votes
             .sort((a, b) => b.vp - a.vp)
-            .slice(0, top);
+            .slice(0, topcutoff);
 
           votes.forEach((vote) => {
             if (!limit || vote.choice.length > max_choice) {
