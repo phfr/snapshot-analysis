@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arbitrum - Pilot program Advisor Elections</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="0x1e5052579c5ed931f90e03e59f34274ba0a006093a6eeeab65e5e4df552668cc-enrich.js"></script>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #fff;">
+    <div id="sankey-diagram" style="width: 100vw; height: 100vh"></div>
+    <footer
+      style="text-align: center; font-size:10px; width: 100vw; position: absolute; bottom: 0px"
+    >
+      top 20 (by voting power) voters and aggregated rest – 20240124 –
+      <a href="https://twitter.com/kwiz4g">@kwiz4g</a>
+    </footer>
+
+    <script>
+      fetch(
+        proposal_id + ".json"
+      )
+        .then((response) => response.json())
+        .then((jsonData) => {
+          const urlParams = new URLSearchParams(window.location.search);
+
+          limit = urlParams.has("limit");
+          console.log("limit exceeded enabled: ", limit);
+
+          if (urlParams.has("top")) {
+            const top = parseInt(urlParams.get("top"), 10);
+          } else {
+            top = 20
+          }
+
+          const nodes = [];
+          const links = [];
+
+          const votes = jsonData.data.votes;
+          const topVoters = votes
+            .sort((a, b) => b.vp - a.vp)
+            .slice(0, top);
+
+          votes.forEach((vote) => {
+            if (!limit || vote.choice.length > max_choice) {
+              if (topVoters.includes(vote)) {
+                vote.choice.forEach((choice) => {
+                  const source = `${
+                    enrich_map[vote.voter.toLowerCase()] || vote.voter
+                  }`; 
+                  const target = `${enrich_map[choice] || choice}`; 
+
+                  if (!nodes.includes(source)) {
+                    nodes.push(source);
+                  }
+                  if (!nodes.includes(target)) {
+                    nodes.push(target);
+                  }
+
+                  links.push({
+                    source: source,
+                    target: target,
+                    value: vote.vp,
+                  });
+                });
+              } else {
+                vote.choice.forEach((choice) => {
+                  const source = `Rest`;
+                  const target = `${enrich_map[choice] || choice}`;
+
+                  if (!nodes.includes(source)) {
+                    nodes.push(source);
+                  }
+                  if (!nodes.includes(target)) {
+                    nodes.push(target);
+                  }
+
+                  const existingLink = links.find(
+                    (link) => link.source === "Rest" && link.target === target
+                  );
+
+                  if (existingLink) {
+                    existingLink.value += vote.vp; 
+                  } else {
+                    links.push({
+                      source: source,
+                      target: target,
+                      value: vote.vp,
+                    });
+                  }
+                });
+              }
+            }
+          });
+
+          const sankeyData = {
+            type: "sankey",
+            orientation: "h",
+            node: {
+              pad: 15,
+              thickness: 20,
+              line: {
+                color: "black",
+                width: 0.5,
+              },
+              label: nodes, // nodes.map(n => `${n} (${n.value})`)
+            },
+            link: {
+              source: links.map((link) => nodes.indexOf(link.source)),
+              target: links.map((link) => nodes.indexOf(link.target)),
+              value: links.map((link) => link.value),
+            },
+          };
+
+          const layout = {
+            title: proposal_title,
+            font: {
+              size: 10,
+            },
+            plot_bgcolor: '#ffffff',
+            paper_bgcolor: '#ffffff',
+            width: window.innerWidth,
+            height: window.innerHeight,
+            margin: {
+      t: 30,  // top margin
+      b: 16,  // bottom margin
+      l: 1,  // left margin
+      r: 1   // right margin
+    }
+          };
+
+          Plotly.newPlot("sankey-diagram", [sankeyData], layout);
+        })
+        .catch((error) => console.error("Error fetching JSON:", error));
+    </script>
+  </body>
+</html>
