@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arbitrum - Snapshot Analysis</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="voter_names.js"></script>
+    <style>
+      #inputs * {
+        margin: 2px;
+      }
+      .modebar-container {
+        display: none;
+      }
+      #menu {
+        display: none;
+        position: absolute;
+        top: 30px;
+        background-color: #f9f9f9;
+        border: 1px solid #ccc;
+        padding: 10px;
+        z-index: 99999;
+      }
+      #menu-link {
+        display: block;
+        background-color: lightblue;
+        padding: 2px 8px 2px 8px;
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #fff">
+    <div id="inputs" style="display: flex">
+      <span id="menu-link" onclick="toggleMenu()">select proposal</span>
+      <button onclick="run()">Update</button>
+      <label for="topcutoff">top n:</label>
+      <input type="number" id="topcutoff" value="15" />
+      <span id="slider-value"></span>
+      <input type="range" id="slider" style="flex: 1" />
+      <span><a href="https://twitter.com/kwiz4g">@kwiz4g</a></span>
+    </div>
+    <div id="menu">
+      <ul>
+        <li>
+          <a
+            href="javascript:changeDataSource('0xc2d7ebf5ef78084b26544905fd6febf0b8256293ce7f67a71fdcdefc5e6284a4');"
+            >Pilot program Council Elections</a
+          >
+        </li>
+        <li>
+          <a
+            href="javascript:changeDataSource('0x1e5052579c5ed931f90e03e59f34274ba0a006093a6eeeab65e5e4df552668cc');"
+            >Pilot program Advisor Elections</a
+          >
+        </li>
+      </ul>
+    </div>
+    <div
+      id="sankey-diagram"
+      style="width: 100vw; height: calc(100vh - 60px)"
+    ></div>
+
+    <script>
+      let gdata, choiceMapping;
+      let minCreated, maxCreated;
+      let slider, sliderValueText;
+      let isSliderDragging = false;
+
+      let proposalId =
+        "0x1e5052579c5ed931f90e03e59f34274ba0a006093a6eeeab65e5e4df552668cc";
+
+      function changeDataSource(propId) {
+        proposalId = propId;
+        gdata = undefined;
+        toggleMenu();
+        run();
+      }
+
+      function toggleMenu() {
+        var menu = document.getElementById("menu");
+        menu.style.display = menu.style.display === "none" ? "block" : "none";
+      }
+
+      function getReadableDateTimeFromTimestamp(timestamp) {
+        const date = new Date(timestamp * 1000);
+        const localOffset = date.getTimezoneOffset();
+        date.setMinutes(date.getMinutes() - localOffset);
+        return date.toISOString().slice(0, 19).replace("T", " ");
+      }
+
+      function updateSlider(val) {
+        sliderValueText.textContent = getReadableDateTimeFromTimestamp(val);
+      }
+
+      function dostuff() {
+        const urlParams = new URLSearchParams(window.location.search);
+
+        limit = urlParams.has("limit");
+        console.log("limit exceeded enabled: ", limit);
+
+        const topcutoff = parseInt(
+          document.getElementById("topcutoff").value,
+          15
+        );
+
+        const nodes = [];
+        const links = [];
+
+        // const votes = gdata.data.votes; // all votes
+        const votes = gdata.votes.filter(
+          (vote) => vote.created <= slider.value
+        );
+        console.log(votes);
+        const topVoters = votes.sort((a, b) => b.vp - a.vp).slice(0, topcutoff);
+
+        votes.forEach((vote) => {
+          if (!limit || vote.choice.length > max_choice) {
+            if (topVoters.includes(vote)) {
+              vote.choice.forEach((choice) => {
+                const source = `${
+                  voterNamesMapping[vote.voter.toLowerCase()] || vote.voter
+                }`;
+                const target = `${choicesMapping[choice - 1] || choice}`;
+
+                if (!nodes.includes(source)) {
+                  nodes.push(source);
+                }
+                if (!nodes.includes(target)) {
+                  nodes.push(target);
+                }
+
+                links.push({
+                  source: source,
+                  target: target,
+                  value: vote.vp,
+                  created: vote.created,
+                });
+              });
+            } else {
+              /* aggegrate the non top voters */
+              vote.choice.forEach((choice) => {
+                const source = `Rest`;
+                const target = `${choicesMapping[choice - 1] || choice}`;
+
+                if (!nodes.includes(source)) {
+                  nodes.push(source);
+                }
+                if (!nodes.includes(target)) {
+                  nodes.push(target);
+                }
+
+                const existingLink = links.find(
+                  (link) => link.source === "Rest" && link.target === target
+                );
+
+                if (existingLink) {
+                  existingLink.value += vote.vp;
+                } else {
+                  links.push({
+                    source: source,
+                    target: target,
+                    value: vote.vp,
+                  });
+                }
+              });
+            }
+          }
+        });
+
+        const sankeyData = {
+          type: "sankey",
+          orientation: "h",
+          node: {
+            pad: 15,
+            thickness: 20,
+            line: {
+              color: "black",
+              width: 0.5,
+            },
+            label: nodes, // nodes.map(n => `${n} (${n.value})`)
+            // hovertemplate: 'Node %{created} has total value %{value}<extra></extra>',
+          },
+          link: {
+            source: links.map((link) => nodes.indexOf(link.source)),
+            target: links.map((link) => nodes.indexOf(link.target)),
+            value: links.map((link) => link.value),
+          },
+        };
+
+        const layout = {
+          title: gdata.proposal.title,
+          font: {
+            size: 10,
+          },
+          plot_bgcolor: "#ffffff",
+          paper_bgcolor: "#ffffff",
+          width: window.innerWidth,
+          height:
+            window.innerHeight - document.getElementById("inputs").offsetHeight,
+          margin: {
+            t: 30,
+            b: 20,
+            l: 1,
+            r: 1,
+          },
+          displayModeBar: false,
+        };
+
+        Plotly.newPlot("sankey-diagram", [sankeyData], layout);
+      }
+
+      function run() {
+        if (!gdata) {
+          fetch("proposals/" + proposalId + ".json")
+            .then((response) => response.json())
+            .then((jsonData) => {
+              /* load data */
+              gdata = jsonData;
+
+              /* slider setup */
+              minCreated = Math.min(...gdata.votes.map((vote) => vote.created));
+              maxCreated = Math.max(...gdata.votes.map((vote) => vote.created));
+
+              slider.min = minCreated;
+              slider.max = maxCreated;
+              slider.value = maxCreated;
+              updateSlider(maxCreated);
+              /* /slider setup */
+
+              /* choices */
+              choicesMapping = gdata.proposal.choices;
+
+              dostuff();
+            })
+            .catch((error) => console.error("Error fetching JSON:", error));
+        } else {
+          console.log("data already here");
+          dostuff();
+        }
+      }
+
+      slider = document.getElementById("slider");
+      sliderValueText = document.getElementById("slider-value");
+
+      run();
+
+      slider.addEventListener("input", function () {
+        const currentValue = parseFloat(this.value);
+        console.log("slider change: ", currentValue);
+        updateSlider(currentValue);
+        run();
+      });
+    </script>
+  </body>
+</html>
